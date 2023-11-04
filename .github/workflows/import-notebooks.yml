@@ -1,0 +1,57 @@
+# Wowchemy GitHub Action to import Jupyter Notebooks as blog posts
+name: Import Blog Posts From Jupyter Notebooks
+
+# Require permission to create a PR
+permissions:
+  contents: write
+  pull-requests: write
+
+# Run workflow when a `.bib` file is added or updated in the `data/` folder
+on:
+  push:
+    branches: ['main']
+    paths: ['notebooks/*.ipynb']
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  wowchemy:
+    if: github.repository_owner != 'wowchemy'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v3
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install academic==0.11.0
+      - name: Run Academic (Bibtex To Markdown Converter)
+        # Check `.bib` file exists for case when action runs on `.bib` deletion
+        # Note GH only provides hashFiles func in `steps.if` context, not `jobs.if` context
+        if: ${{ hashFiles('publications.bib') != '' }}
+        run: academic import 'notebooks/*.ipynb' content/post/ --verbose
+      - name: Create Pull Request
+        # Set ID for `Check outputs` stage
+        id: cpr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: 'content: import publications from Bibtex'
+          title: Wowchemy - Import latest blog posts
+          body: |
+            Import the latest blog posts from `notebooks/` to `content/post/`.
+            将最新的博客文章从 `notebooks/` 导入到 `content/post/`。
+            [View Documentation](https://github.com/wowchemy/bibtex-to-markdown)
+          base: main
+          labels: automated-pr, content
+          branch: wowchemy-import-posts
+          delete-branch: true
+      - name: Check outputs
+        if: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
